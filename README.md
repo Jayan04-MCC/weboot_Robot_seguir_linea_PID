@@ -274,7 +274,7 @@ printf("PID: P=%.2f I=%.2f D=%.2f Output=%.2f\n", P, I, D, pid_output);
 
 ## 👨‍💻 Autor
 
-[Tu nombre]
+Jayan Michael Caceres Cuba
 
 ## 📄 Licencia
 ```
