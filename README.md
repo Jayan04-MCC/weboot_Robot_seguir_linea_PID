@@ -287,14 +287,10 @@ Ki = 0.001;  // Aumentar ganancia integral
 - **Compilador C++**: Incluido con Webots
 - **Sistema Operativo**: Windows, Linux o macOS
 
-## Licencia
-
-Proyecto educativo - Libre para uso académico
 
 ## Autor
 
-Proyecto de simulación de robótica móvil
-
+Jayan Michael Caceres Cuba
 ---
 
 ## Referencias
