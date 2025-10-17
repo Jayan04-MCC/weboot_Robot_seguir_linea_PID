@@ -1,296 +1,304 @@
-# weboot_Robot_seguir_linea_PID
+# Robot Seguidor de Línea - E-puck
 
-# Robot E-puck: Seguidor de Línea con Control PID
+Proyecto de simulación en Webots de un robot E-puck que sigue una línea negra usando control PID.
 
-## 📋 Descripción
+## Descripción General
 
-Este proyecto implementa un sistema de control para un robot e-puck que sigue una línea negra mientras evita obstáculos. El sistema utiliza una **Arquitectura de Subsunción** combinada con un **controlador PID** para un seguimiento preciso y suave de la línea.
+Este proyecto implementa un algoritmo de seguimiento de línea usando el robot E-puck de Webots. El robot utiliza sensores de suelo (ground sensors) para detectar una pista negra sobre un fondo blanco y ajusta su trayectoria en tiempo real mediante un controlador PID.
 
-## 🎯 Características
+## Características de la Pista
 
-- ✅ Seguimiento de línea con control PID completo
-- ✅ Detección y evasión de obstáculos
-- ✅ Re-entrada automática a la línea después de evitar obstáculos
-- ✅ Arquitectura de Subsunción (Brooks)
-- ✅ Compatible con simulación y robot real
+- **Forma**: Pista circular cerrada (anillo)
+- **Ancho de la pista**: 6 cm (0.06 m)
+- **Ancho del robot E-puck**: 7 cm (0.07 m)
+- **Dificultad**: La pista es ligeramente más delgada que el robot, lo que hace el seguimiento más desafiante
+- **Radio exterior**: 1.0 m
+- **Radio interior**: 0.94 m
+- **Color**: Negro oscuro (RGB: 0.05, 0.05, 0.05)
 
-## 🏗️ Arquitectura del Sistema
+## Componentes del Sistema
 
-### Arquitectura de Subsunción
+### Hardware (Simulado)
 
-El robot utiliza múltiples módulos de comportamiento organizados en capas jerárquicas, donde los comportamientos de mayor prioridad pueden suprimir a los de menor prioridad:
-```
-┌─────────────────────────────────────┐
-│  Capa 3: LEM (Line Entering)        │  ← Mayor Prioridad
-│  Re-entrada a la línea               │
-├─────────────────────────────────────┤
-│  Capa 2: OAM + OFM                   │
-│  Evitar/Seguir obstáculos            │
-├─────────────────────────────────────┤
-│  Capa 1: LFM (Line Following)        │  ← Menor Prioridad
-│  Seguimiento de línea con PID        │
-└─────────────────────────────────────┘
-```
+#### Robot E-puck
+- **Motores**: 2 motores diferenciales (ruedas izquierda y derecha)
+- **Sensores**: 3 sensores de suelo infrarrojos (ground sensors)
+  - `gs0`: Sensor izquierdo
+  - `gs1`: Sensor central
+  - `gs2`: Sensor derecho
+  - Solo se utilizan gs0 y gs2 para el control
 
-### Módulos de Comportamiento
+#### Sensores de Suelo
+Los sensores de suelo del E-puck funcionan mediante reflexión de luz infrarroja:
+- **Superficie blanca/clara**: ~1000 (alta reflexión)
+- **Superficie negra**: ~300-400 (baja reflexión)
+- **Rango de normalización**: [300, 1000]
 
-#### 1. **LFM - Line Following Module**
-Implementa un **controlador PID completo** para seguir la línea negra:
-```c
-PID_output = Kp × error + Ki × ∫error dt + Kd × d(error)/dt
-```
+## Algoritmo de Control
 
-**Componentes:**
-- **Proporcional (P):** Respuesta inmediata al error actual
-- **Integral (I):** Elimina errores acumulados en el tiempo
-- **Derivativo (D):** Predice y suaviza cambios bruscos
+### Controlador PID
 
-#### 2. **OAM - Obstacle Avoidance Module**
-- Detecta obstáculos usando 8 sensores de proximidad IR
-- Identifica el lado del obstáculo (izquierda/derecha)
-- Genera velocidades para alejarse del obstáculo
+El robot utiliza un controlador PID (Proporcional-Integral-Derivativo) para mantener el seguimiento de la línea.
 
-#### 3. **LLM - Line Leaving Module**
-- Monitorea cuando el robot abandona la línea
-- Señala eventos a otros módulos
-- Resetea el PID al salir de la línea
+#### Parámetros PID
 
-#### 4. **OFM - Obstacle Following Module**
-- Genera tendencia de giro hacia el lado del obstáculo
-- Junto con OAM, crea comportamiento de "rodear obstáculo"
-
-#### 5. **LEM - Line Entering Module**
-- Máquina de estados finitos con 4 estados
-- Maneja la re-entrada a la línea después de evitar obstáculos
-- Resetea el PID al volver a la línea
-
-## 🔧 Control PID
-
-### Parámetros del Controlador
-```c
-#define KP 0.4      // Ganancia Proporcional
-#define KI 0.001    // Ganancia Integral
-#define KD 2.0      // Ganancia Derivativa
+```cpp
+Kp = 3.5    // Ganancia proporcional
+Ki = 0.0005 // Ganancia integral
+Kd = 1.2    // Ganancia derivativa
 ```
 
-### Funcionamiento
+#### Componentes del PID
 
-1. **Error:** Diferencia entre sensores de suelo derecho e izquierdo
-```c
-   error = gs_value[GS_RIGHT] - gs_value[GS_LEFT]
+1. **Proporcional (P)**: Reacciona al error actual
+   - Calcula la diferencia entre los sensores izquierdo y derecho
+   - Error positivo → el sensor derecho ve más negro → girar a la izquierda
+   - Error negativo → el sensor izquierdo ve más negro → girar a la derecha
+
+2. **Integral (I)**: Corrige errores acumulados en el tiempo
+   - Acumula el error histórico para eliminar desviaciones constantes
+   - Limitada a [-50, 50] para evitar "windup" (saturación)
+
+3. **Derivativa (D)**: Suaviza los cambios bruscos
+   - Calcula la tasa de cambio del error
+   - Previene oscilaciones y sobrepaso
+
+### Cálculo del Error
+
+```cpp
+// Normalizar valores de sensores a [0, 1]
+// 1 = negro (línea), 0 = blanco (fondo)
+leftNorm = 1.0 - ((leftValue - 300) / (1000 - 300))
+rightNorm = 1.0 - ((rightValue - 300) / (1000 - 300))
+
+// Error = diferencia entre sensores
+error = rightNorm - leftNorm
 ```
 
-2. **Término Proporcional:** Corrección inmediata
-```c
-   P = KP × error
+### Recuperación de Línea Perdida
+
+Si ambos sensores detectan blanco (línea perdida):
+```cpp
+if (leftNorm < 0.1 && rightNorm < 0.1) {
+    // Mantener última dirección conocida amplificada
+    error = lastValidError * 1.2
+}
 ```
 
-3. **Término Integral:** Corrección de errores acumulados
-```c
-   integral += error × dt
-   I = KI × integral
+### Control de Velocidad
+
+```cpp
+baseSpeed = 4.0         // Velocidad base de avance
+maxCorrection = 3.5     // Corrección máxima permitida
+
+// Calcular velocidades de las ruedas
+leftSpeed = baseSpeed - pidOutput
+rightSpeed = baseSpeed + pidOutput
+
+// Limitar al rango [0, MAX_SPEED=6.28]
 ```
 
-4. **Término Derivativo:** Predicción de tendencia
-```c
-   derivative = (error - previous_error) / dt
-   D = KD × derivative
+## Estructura del Código
+
+### Archivo Principal: `line_follower_cpp.cpp`
+
+```
+1. Inicialización
+   - Crear instancia del robot
+   - Habilitar sensores de suelo (gs0, gs2)
+   - Configurar motores en modo velocidad
+
+2. Variables del PID
+   - integral: Acumulador del error
+   - previousError: Error del paso anterior
+   - lastValidError: Última dirección válida detectada
+
+3. Bucle Principal (TIME_STEP = 64ms)
+   a) Leer valores de sensores
+   b) Normalizar valores [0, 1]
+   c) Calcular error
+   d) Calcular componentes P, I, D
+   e) Generar salida PID
+   f) Ajustar velocidades de motores
+   g) Imprimir información de debug
 ```
 
-5. **Salida Total:**
-```c
-   correction = P + I + D
-   left_speed = BASE_SPEED - correction
-   right_speed = BASE_SPEED + correction
+### Archivos del Proyecto
+
+```
+my_line_robot_projec/
+├── controllers/
+│   └── line_follower_cpp/
+│       ├── line_follower_cpp.cpp    # Código del controlador
+│       ├── Makefile                  # Archivo de compilación
+│       └── build/
+│           └── release/
+│               └── line_follower_cpp.exe
+├── worlds/
+│   └── empty.wbt                     # Mundo de simulación
+└── README.md                         # Este archivo
 ```
 
-### Anti-Windup
+## Flujo de Datos
 
-El sistema incluye protección contra saturación del término integral:
-```c
-#define INTEGRAL_LIMIT 1000
-
-if (integral > INTEGRAL_LIMIT)
-    integral = INTEGRAL_LIMIT;
-else if (integral < -INTEGRAL_LIMIT)
-    integral = -INTEGRAL_LIMIT;
+```
+Sensores (gs0, gs2)
+    ↓
+Lectura de valores [300-1000]
+    ↓
+Normalización [0-1]
+    ↓
+Cálculo de error (rightNorm - leftNorm)
+    ↓
+Controlador PID
+    ├── P = Kp × error
+    ├── I = Ki × ∫error dt
+    └── D = Kd × (derror/dt)
+    ↓
+Salida PID (limitada)
+    ↓
+Velocidades de motores
+    ├── leftSpeed = baseSpeed - pidOutput
+    └── rightSpeed = baseSpeed + pidOutput
+    ↓
+Actuadores (motores)
 ```
 
-## 📊 Sensores
+## Funcionamiento Detallado
 
-### Sensores de Proximidad (8)
-- **ps0-ps3:** Lado derecho (0°, 45°, 90°, trasero)
-- **ps4-ps7:** Lado izquierdo (trasero, 90°, 45°, 0°)
-- **Umbral de detección:** 100 unidades
+### 1. Detección de Línea
 
-### Sensores de Suelo (3)
-- **gs0:** Izquierdo
-- **gs1:** Centro
-- **gs2:** Derecho
-- **Umbral blanco/negro:** ~500-900 unidades
+Los sensores de suelo leen continuamente la superficie bajo el robot:
+- Si el sensor izquierdo ve negro y el derecho ve blanco → el robot está desviado a la izquierda
+- Si el sensor derecho ve negro y el izquierdo ve blanco → el robot está desviado a la derecha
+- Si ambos ven negro → el robot está centrado en la línea
+- Si ambos ven blanco → el robot perdió la línea
 
-## 🚀 Uso
+### 2. Ajuste de Dirección
 
-### Compilación
-```bash
-# En Webots, el código se compila automáticamente
-# O usar el compilador de C de tu sistema
-gcc -o epuck_controller epuck_controller.c -lwebots
+El controlador PID convierte el error en un ajuste de velocidad:
+- **Error positivo** (desviación a la derecha):
+  - Reduce velocidad de rueda izquierda
+  - Aumenta velocidad de rueda derecha
+  - Resultado: giro a la izquierda
+
+- **Error negativo** (desviación a la izquierda):
+  - Aumenta velocidad de rueda izquierda
+  - Reduce velocidad de rueda derecha
+  - Resultado: giro a la derecha
+
+### 3. Estabilización
+
+La componente derivativa del PID suaviza los movimientos:
+- Detecta cambios rápidos en el error
+- Aplica corrección preventiva
+- Evita oscilaciones y sobrepaso
+
+## Compilación y Ejecución
+
+### Compilar
+
+1. Abrir Webots
+2. Menú: **Build → Build** (o **Ctrl+F7**)
+3. Verificar que no hay errores en la consola
+
+### Ejecutar
+
+1. Abrir el mundo: `worlds/empty.wbt`
+2. Presionar el botón de **Play** en Webots
+3. El robot comenzará a seguir la línea automáticamente
+
+### Detener
+
+- Presionar el botón de **Pause** o **Reset**
+
+## Salida de Debug
+
+El programa imprime información en tiempo real:
+
+```
+L:850 R:350 | Error:-0.714 | P:-2.499 I:-0.003 D:-1.234 | PID:-3.5 | Vel L:7.5 R:0.5
 ```
 
-### Ejecución
+- **L**: Valor del sensor izquierdo (bruto)
+- **R**: Valor del sensor derecho (bruto)
+- **Error**: Error calculado [-1, 1]
+- **P**: Componente proporcional
+- **I**: Componente integral
+- **D**: Componente derivativa
+- **PID**: Salida total del controlador
+- **Vel L/R**: Velocidades aplicadas a las ruedas
 
-1. Abrir el mundo en Webots
-2. Cargar el controlador en el robot e-puck
-3. Ejecutar la simulación
+## Ajuste de Parámetros
 
-### Ajuste de Parámetros PID
-
-Para optimizar el comportamiento, ajusta las constantes según la respuesta:
-
-| Problema | Solución |
-|----------|----------|
-| Robot oscila mucho | Reducir **KP** o aumentar **KD** |
-| No sigue bien las curvas | Aumentar **KP** |
-| Error persistente en rectas | Aumentar **KI** (cuidado con overshooting) |
-| Respuesta muy lenta | Aumentar **KP** y **KD** |
-| Vibraciones/ruido | Reducir **KD** |
-
-### Método de Ajuste Sugerido
-
-1. **Empezar con KI = 0, KD = 0**
-2. **Aumentar KP** hasta que siga la línea con oscilación
-3. **Añadir KD** para reducir oscilaciones
-4. **Añadir KI** (pequeño) para eliminar error residual
-5. **Ajustar finamente** todos los parámetros
-
-## 📁 Estructura del Código
-```
-├── Definiciones globales
-│   ├── Constantes (TIME_STEP, sensores, etc.)
-│   └── Variables de sensores y motores
-│
-├── Módulos de Comportamiento
-│   ├── LineFollowingModule() [CON PID]
-│   ├── ObstacleAvoidanceModule()
-│   ├── LineLeavingModule()
-│   ├── ObstacleFollowingModule()
-│   └── LineEnteringModule()
-│
-├── Funciones auxiliares
-│   └── ResetPID()
-│
-└── main()
-    ├── Inicialización
-    ├── Loop principal
-    │   ├── Lectura de sensores
-    │   ├── Ejecución de módulos
-    │   ├── Supresión de comportamientos
-    │   └── Aplicación de velocidades
-    └── Debug
+### Para Mayor Velocidad
+```cpp
+baseSpeed = 5.0;  // Aumentar velocidad base
 ```
 
-## 🔬 Flujo de Ejecución
-```mermaid
-graph TD
-    A[Inicio] --> B[Leer Sensores]
-    B --> C[LFM: Seguir línea con PID]
-    C --> D{¿Obstáculo detectado?}
-    D -->|No| E[Aplicar velocidades LFM]
-    D -->|Sí| F[OAM: Evitar obstáculo]
-    F --> G[OFM: Seguir contorno]
-    G --> H[LLM: Monitorear salida de línea]
-    H --> I{¿Fuera de línea?}
-    I -->|No| J[Aplicar velocidades OAM+OFM]
-    I -->|Sí| K[LEM: Re-entrar a línea]
-    K --> L{¿En línea?}
-    L -->|No| K
-    L -->|Sí| M[Reset PID]
-    M --> B
-    E --> B
-    J --> B
+### Para Mayor Agresividad en Curvas
+```cpp
+Kp = 4.0;  // Aumentar ganancia proporcional
 ```
 
-## 📈 Ventajas del Control PID
-
-| Característica | Sin PID | Con PID |
-|----------------|---------|---------|
-| Seguimiento de curvas | Regular | Excelente |
-| Estabilidad | Media | Alta |
-| Error residual | Presente | Minimizado |
-| Oscilaciones | Frecuentes | Reducidas |
-| Respuesta a perturbaciones | Lenta | Rápida |
-
-## 🛠️ Requisitos
-
-- **Software:** Webots R2023b o superior
-- **Robot:** E-puck (simulado o real)
-- **Sensores requeridos:**
-  - 8 sensores de distancia IR
-  - 3 sensores de suelo
-  - 2 motores de ruedas
-
-## 📝 Notas Técnicas
-
-### Periodo de Muestreo
-```c
-#define TIME_STEP 32  // [ms]
-dt = 32 / 1000.0      // 0.032 segundos
+### Para Mayor Estabilidad
+```cpp
+Kd = 1.5;  // Aumentar ganancia derivativa
 ```
 
-### Conversión de Velocidad
-```c
-// Velocidad en el motor = velocidad_calculada × 0.00628
-wb_motor_set_velocity(left_motor, 0.00628 * speed[LEFT]);
+### Para Corregir Deriva Constante
+```cpp
+Ki = 0.001;  // Aumentar ganancia integral
 ```
 
-### Estados del LEM
-```c
-LEM_STATE_STANDBY          // 0: En espera
-LEM_STATE_LOOKING_FOR_LINE // 1: Buscando línea
-LEM_STATE_LINE_DETECTED    // 2: Línea detectada
-LEM_STATE_ON_LINE          // 3: Sobre la línea
-```
+## Solución de Problemas
 
-## 🐛 Depuración
+### El robot no detecta la línea
+- Verificar que se usan `E-puckGroundSensors` en el archivo .wbt
+- Verificar que los sensores se llaman "gs0" y "gs2"
+- Comprobar que la pista es de color oscuro (diffuseColor < 0.1)
 
-El código incluye salida de depuración:
-```c
-printf("OAM %d side %d   LLM %d inibitA %d   OFM %d   LEM %d state %d\n",
-       oam_active, oam_side, llm_active, llm_inibit_ofm_speed,
-       ofm_active, lem_active, lem_state);
-```
+### El robot oscila mucho
+- Reducir Kp (ganancia proporcional)
+- Aumentar Kd (ganancia derivativa)
+- Reducir baseSpeed
 
-Para activar debug del PID, descomentar en `LineFollowingModule()`:
-```c
-printf("PID: P=%.2f I=%.2f D=%.2f Output=%.2f\n", P, I, D, pid_output);
-```
+### El robot pierde la línea en curvas
+- Aumentar Kp para reacción más rápida
+- Reducir baseSpeed para más control
+- Ajustar el multiplicador de recuperación (1.2)
 
-## 📚 Referencias
+### El robot va muy lento
+- Aumentar baseSpeed
+- Aumentar maxCorrection
+- Verificar que MAX_SPEED sea suficiente (6.28)
 
-- **Arquitectura de Subsunción:** Brooks, R. A. (1986). "A Robust Layered Control System for a Mobile Robot"
-- **Control PID:** Åström, K. J., & Hägglund, T. (1995). "PID Controllers: Theory, Design, and Tuning"
-- **Webots:** https://cyberbotics.com/
+## Mejoras Futuras
 
-## 👨‍💻 Autor
+1. Usar el tercer sensor (gs1) para mejor detección
+2. Implementar velocidad adaptativa según la curvatura
+3. Agregar detección de intersecciones
+4. Implementar contador de vueltas
+5. Optimizar parámetros PID mediante algoritmos genéticos
 
-Jayan Michael Caceres Cuba
+## Requisitos
 
-## 📄 Licencia
-```
-Copyright 1996-2024 Cyberbotics Ltd.
+- **Webots**: R2025a o superior
+- **Compilador C++**: Incluido con Webots
+- **Sistema Operativo**: Windows, Linux o macOS
 
-Licensed under the Apache License, Version 2.0
-```
+## Licencia
+
+Proyecto educativo - Libre para uso académico
+
+## Autor
+
+Proyecto de simulación de robótica móvil
 
 ---
 
-## 🔗 Enlaces Útiles
+## Referencias
 
 - [Documentación de Webots](https://cyberbotics.com/doc/guide/index)
 - [E-puck Robot](https://www.gctronic.com/doc/index.php/E-Puck)
-- [Tutorial PID Control](https://en.wikipedia.org/wiki/PID_controller)
-
----
-
-**⭐ Si este proyecto te fue útil, dale una estrella!**
+- [Control PID](https://en.wikipedia.org/wiki/PID_controller)
