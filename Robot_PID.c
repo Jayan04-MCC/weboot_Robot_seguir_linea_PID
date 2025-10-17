@@ -3,8 +3,10 @@
 #include <webots/DistanceSensor.hpp>
 #include <iostream>
 #include <cmath>
-
+// intervalo de tiempo en milisegundos entre cada iteración del simulador.
+//simulacion mas lenta pero mas precisa 
 #define TIME_STEP 64
+//velocidad de los motores
 #define MAX_SPEED 6.28
 
 using namespace webots;
@@ -22,6 +24,7 @@ int main()
 
     Motor *leftMotor = robot->getMotor("left wheel motor");
     Motor *rightMotor = robot->getMotor("right wheel motor");
+    //INFINITY gira indefinidamente, no te detengas en una posición específica
     leftMotor->setPosition(INFINITY);
     rightMotor->setPosition(INFINITY);
     leftMotor->setVelocity(0.0);
@@ -29,12 +32,17 @@ int main()
 
     // Parámetros del controlador PID (BALANCEADOS para giros fuertes pero controlados)
     double Kp = 3.5;    // Ganancia proporcional MODERADA-ALTA
+    //para evitar que el robot se vuelva inestable por acumulacion excesiva de error
     double Ki = 0.0005; // Ganancia integral baja para evitar acumulación excesiva
+    
     double Kd = 1.2;    // Ganancia derivativa para suavizar transiciones
 
     // Variables del PID
+    //acumulador para la componente integral 
     double integral = 0.0;
+    //Guarda el error del ciclo anterior para calcular la derivada
     double previousError = 0.0;
+    //Guarda el último error cuando al menos un sensor detectaba la línea
     double lastValidError = 0.0; // Para mantener última dirección conocida
 
     // Parámetros de velocidad
@@ -48,8 +56,8 @@ int main()
 
     while (robot->step(TIME_STEP) != -1)
     {
-        double leftValue = leftSensor->getValue();
-        double rightValue = rightSensor->getValue();
+        double leftValue = leftSensor->getValue(); //lecura del sensor iz
+        double rightValue = rightSensor->getValue();//lectura del sensor derecho
 
         // Normalizar valores de sensores a rango [0, 1]
         // IMPORTANTE: Invertir para que 1 = negro (línea), 0 = blanco (fondo)
