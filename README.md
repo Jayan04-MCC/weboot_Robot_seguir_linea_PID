@@ -1,6 +1,8 @@
 # Robot Seguidor de Línea - E-puck
 
 Proyecto de simulación en Webots de un robot E-puck que sigue una línea negra usando control PID.
+<img width="930" height="446" alt="image" src="https://github.com/user-attachments/assets/9006ebfc-2f68-461d-b5ed-4cf22708a47a" />
+
 
 ## Descripción General
 
